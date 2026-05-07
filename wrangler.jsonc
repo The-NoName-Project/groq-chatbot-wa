@@ -22,8 +22,19 @@
     "enabled": true
   },
 
-  // Environment variables
+  // Environment variables (set GROQ_API_KEY in .dev.vars for local dev, or via wrangler secret put for production)
   "vars": {
-    // Add your environment variables here
-  }
+    "GROQ_API_KEY": ""
+  },
+
+  // D1 SQLite database for chat history
+  // Run: pnpm wrangler d1 create groq-chatbot-db  → copy the database_id here
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "groq-chatbot-db",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ]
 }

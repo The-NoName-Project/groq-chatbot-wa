@@ -6,6 +6,8 @@ declare namespace Cloudflare {
 	}
 	interface Env {
 		ASSETS: Fetcher;
+		GROQ_API_KEY: string;
+		DB: D1Database;
 	}
 }
 interface Env extends Cloudflare.Env {}

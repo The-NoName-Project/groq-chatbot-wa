@@ -1,10 +1,10 @@
 export const Document: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => (
-  <html lang="en">
+  <html lang="es">
     <head>
       <meta charSet="utf-8" />
-      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
       <title>Groq Chatbot</title>
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link
@@ -14,9 +14,10 @@ export const Document: React.FC<{ children: React.ReactNode }> = ({
       />
       <link
         rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,100..900;1,100..900&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=optional"
+        href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap"
         precedence="first"
       />
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" />
       <link rel="modulepreload" href="/src/client.tsx" />
     </head>
     <body>

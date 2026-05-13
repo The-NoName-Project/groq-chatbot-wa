@@ -418,6 +418,36 @@
   margin-bottom: 8px;
 }
 
+.presetRow {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.presetBtn {
+  padding: 5px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border2);
+  background: var(--surface2);
+  color: var(--text2);
+  cursor: pointer;
+  font-size: 12px;
+  font-family: var(--mono);
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.presetBtn:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.presetBtnActive {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
 .sysp {
   width: 100%;
   background: var(--surface2);

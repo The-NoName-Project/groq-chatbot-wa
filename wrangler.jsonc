@@ -1,40 +1,34 @@
 {
-  // Schema reference for wrangler configuration
-  "$schema": "node_modules/wrangler/config-schema.json",
-
-  // Name of your worker
-  "name": "__change_me__",
-
-  // Entry point for your worker
-  "main": "src/worker.tsx",
-
-  // Compatibility settings
-  "compatibility_date": "2025-08-21",
-  "compatibility_flags": ["nodejs_compat"],
-
-  // Assets configuration
-  "assets": {
-    "binding": "ASSETS"
-  },
-
-  // Observability settings
-  "observability": {
-    "enabled": true
-  },
-
-  // Environment variables (set GROQ_API_KEY in .dev.vars for local dev, or via wrangler secret put for production)
-  "vars": {
-    "GROQ_API_KEY": ""
-  },
-
-  // D1 SQLite database for chat history
-  // Run: pnpm wrangler d1 create groq-chatbot-db  → copy the database_id here
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "groq-chatbot-db",
-      "database_id": "00000000-0000-0000-0000-000000000000",
-      "migrations_dir": "migrations"
-    }
-  ]
+	// Schema reference for wrangler configuration
+	"$schema": "node_modules/wrangler/config-schema.json",
+	// Name of your worker
+	"name": "groq-chatbot-wa",
+	// Entry point for your worker
+	"main": "src/worker.tsx",
+	// Compatibility settings
+	"compatibility_date": "2025-08-21",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	// Assets configuration
+	"assets": {
+		"binding": "ASSETS"
+	},
+	// Observability settings
+	"observability": {
+		"enabled": true
+	},
+	// Environment variables (set GROQ_API_KEY in .dev.vars for local dev, or via wrangler secret put for production)
+	"vars": {
+		"GROQ_API_KEY": ""
+	},
+	// D1 SQLite database for chat history
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "groq-chatbot-db",
+			"database_id": "4b29f838-a3ed-4adc-8ea9-abcb0720417e",
+			"migrations_dir": "migrations"
+		}
+	]
 }

@@ -55,7 +55,7 @@ type ChatEntry =
   | { id: string; kind: "assistant"; content: string; isError?: boolean; ts: string }
   | { id: string; kind: "info"; content: string }
   | { id: string; kind: "files"; attachments: Attachment[] }
-  | { id: string; kind: "extraction"; files: ExtractionResult[]; ts: string };
+  | { id: string; kind: "extraction"; files: ExtractionResult[]; labels: [string, string][]; ts: string };
 
 interface Stats {
   tokens: string;
@@ -81,15 +81,18 @@ interface DBMessage {
 
 interface ExtractionResult {
   name: string;
-  titular: string | null;
-  institucion: string | null;
-  clabe: string | null;
-  cuenta_tarjeta: string | null;
-  rfc_cliente: string | null;
-  rfc_institucion: string | null;
-  saldo: string | null;
-  periodo: string | null;
   error?: string;
+  [key: string]: string | null | undefined;
+}
+
+interface ContextPreset {
+  id: string;
+  label: string;
+  system: string;
+  extractionSystem: string;
+  extractionLabels: [string, string][];
+  extractionDefaults: Record<string, null>;
+  extractionQuestion: string;
 }
 
 const MODELS = [
@@ -97,7 +100,20 @@ const MODELS = [
   { value: "llama-3.3-70b-versatile", label: "llama-3.3-70b (texto)" },
 ];
 
-const DEFAULT_SYSTEM = `Eres un asistente experto en análisis de documentos financieros mexicanos (estados de cuenta, comprobantes, facturas).
+const CONTEXT_PRESETS: ContextPreset[] = [
+  {
+    id: "chatbot",
+    label: "Chatbot",
+    system: "Eres un asistente útil y amigable. Responde de forma clara y concisa en el idioma del usuario.",
+    extractionSystem: "",
+    extractionLabels: [],
+    extractionDefaults: {},
+    extractionQuestion: "",
+  },
+  {
+    id: "financiero",
+    label: "Financiero",
+    system: `Eres un asistente experto en análisis de documentos financieros mexicanos (estados de cuenta, comprobantes, facturas).
 
 Cuando analices un documento extrae y presenta:
 - Titular / nombre del cliente
@@ -109,11 +125,62 @@ Cuando analices un documento extrae y presenta:
 - Período del estado de cuenta
 - Cualquier otro dato financiero relevante
 
-Presenta los datos en formato claro. Si recibes múltiples lotes del mismo documento, consolida toda la información al final.`;
-
-const EXTRACTION_SYSTEM = `Eres un extractor de datos de documentos financieros mexicanos. Analiza el documento y responde ÚNICAMENTE con un objeto JSON válido (sin texto adicional, sin markdown, sin explicaciones):
+Presenta los datos en formato claro. Si recibes múltiples lotes del mismo documento, consolida toda la información al final.`,
+    extractionSystem: `Eres un extractor de datos de documentos financieros mexicanos. Analiza el documento y responde ÚNICAMENTE con un objeto JSON válido (sin texto adicional, sin markdown, sin explicaciones):
 {"titular":null,"institucion":null,"clabe":null,"cuenta_tarjeta":null,"rfc_cliente":null,"rfc_institucion":null,"saldo":null,"periodo":null}
-Usa null para campos no encontrados. El campo "saldo" debe incluir la moneda (ej: "$31.15").`;
+Usa null para campos no encontrados. El campo "saldo" debe incluir la moneda (ej: "$31.15").`,
+    extractionLabels: [
+      ["titular", "Titular"],
+      ["institucion", "Institución"],
+      ["clabe", "CLABE"],
+      ["cuenta_tarjeta", "Cuenta / Tarjeta"],
+      ["rfc_cliente", "RFC Cliente"],
+      ["rfc_institucion", "RFC Institución"],
+      ["saldo", "Saldo"],
+      ["periodo", "Período"],
+    ],
+    extractionDefaults: { titular: null, institucion: null, clabe: null, cuenta_tarjeta: null, rfc_cliente: null, rfc_institucion: null, saldo: null, periodo: null },
+    extractionQuestion: "Extrae los campos financieros del documento en JSON.",
+  },
+  {
+    id: "ine",
+    label: "INE",
+    system: `Eres un asistente experto en lectura de credenciales INE (Credencial para Votar) mexicanas.
+
+Cuando analices una credencial INE extrae y presenta:
+- Nombre completo
+- CURP
+- Clave de elector
+- Número de emisión
+- Fecha de nacimiento
+- Sexo
+- Domicilio completo
+- Municipio / Delegación
+- Estado
+- Sección electoral
+- Vigencia (año de vencimiento)
+
+Presenta los datos en formato claro y organizado.`,
+    extractionSystem: `Eres un extractor de datos de credenciales INE (Credencial para Votar) mexicanas. Analiza la imagen y responde ÚNICAMENTE con un objeto JSON válido (sin texto adicional, sin markdown, sin explicaciones):
+{"nombre":null,"curp":null,"clave_elector":null,"num_emision":null,"fecha_nacimiento":null,"sexo":null,"domicilio":null,"municipio":null,"estado":null,"seccion":null,"vigencia":null}
+Usa null para campos no encontrados.`,
+    extractionLabels: [
+      ["nombre", "Nombre"],
+      ["curp", "CURP"],
+      ["clave_elector", "Clave de Elector"],
+      ["num_emision", "Núm. Emisión"],
+      ["fecha_nacimiento", "Fecha Nacimiento"],
+      ["sexo", "Sexo"],
+      ["domicilio", "Domicilio"],
+      ["municipio", "Municipio"],
+      ["estado", "Estado"],
+      ["seccion", "Sección Electoral"],
+      ["vigencia", "Vigencia"],
+    ],
+    extractionDefaults: { nombre: null, curp: null, clave_elector: null, num_emision: null, fecha_nacimiento: null, sexo: null, domicilio: null, municipio: null, estado: null, seccion: null, vigencia: null },
+    extractionQuestion: "Extrae los campos de la credencial INE en JSON.",
+  },
+];
 
 const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
 const nowStr = () => new Date().toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
@@ -175,7 +242,8 @@ function renderJSON(txt: string): string {
 export function Chat() {
   // Settings
   const [model, setModel] = useState(MODELS[0].value);
-  const [systemPrompt, setSystemPrompt] = useState(DEFAULT_SYSTEM);
+  const [selectedPresetId, setSelectedPresetId] = useState("financiero");
+  const [systemPrompt, setSystemPrompt] = useState(CONTEXT_PRESETS[1].system);
   const [temperature, setTemperature] = useState(0.1);
   const [maxTokens, setMaxTokens] = useState(2000);
   const [batchSize, setBatchSize] = useState(4);
@@ -415,18 +483,21 @@ export function Chat() {
   };
 
   const extractFromFile = async (att: Attachment): Promise<ExtractionResult> => {
+    const preset = CONTEXT_PRESETS.find(p => p.id === selectedPresetId) ?? CONTEXT_PRESETS[1];
+    if (!preset.extractionSystem) {
+      return { name: att.name, ...preset.extractionDefaults, error: "Extracción automática no disponible en modo Chatbot." };
+    }
     try {
-      const question = "Extrae los campos financieros del documento en JSON.";
+      const question = preset.extractionQuestion;
       const trimmed = { ...att, pages: att.pages.slice(0, 2), pageCount: Math.min(att.pageCount, 2) };
-      const { results } = await processBatches(trimmed, question, () => {}, EXTRACTION_SYSTEM, true);
-      const { text } = await consolidate(results, question, EXTRACTION_SYSTEM, true);
+      const { results } = await processBatches(trimmed, question, () => {}, preset.extractionSystem, true);
+      const { text } = await consolidate(results, question, preset.extractionSystem, true);
       const clean = text.trim().replace(/^```json\n?/, "").replace(/\n?```$/, "").trim();
-      // Try to find JSON object in the response even if there's surrounding text
       const match = clean.match(/\{[\s\S]*\}/);
       const parsed = JSON.parse(match ? match[0] : clean);
-      return { name: att.name, titular: null, institucion: null, clabe: null, cuenta_tarjeta: null, rfc_cliente: null, rfc_institucion: null, saldo: null, periodo: null, ...parsed };
+      return { name: att.name, ...preset.extractionDefaults, ...parsed };
     } catch (e) {
-      return { name: att.name, titular: null, institucion: null, clabe: null, cuenta_tarjeta: null, rfc_cliente: null, rfc_institucion: null, saldo: null, periodo: null, error: (e as Error).message };
+      return { name: att.name, ...preset.extractionDefaults, error: (e as Error).message };
     }
   };
 
@@ -456,12 +527,16 @@ export function Chat() {
     if (isExtractionMode) {
       push({ id: genId(), kind: "info", content: `⚡ Extrayendo datos de ${activeAtt.length} archivo${activeAtt.length > 1 ? "s" : ""}...` });
       try {
+        const activePreset = CONTEXT_PRESETS.find(p => p.id === selectedPresetId) ?? CONTEXT_PRESETS[1];
         const results = await Promise.all(activeAtt.map(att => extractFromFile(att)));
         setTypingText(null);
-        push({ id: genId(), kind: "extraction", files: results, ts: nowStr() });
+        push({ id: genId(), kind: "extraction", files: results, labels: activePreset.extractionLabels, ts: nowStr() });
 
+        const summaryFields = activePreset.extractionLabels.slice(0, 3);
         const summary = results.map(r =>
-          `**${r.name}**\nTitular: ${r.titular ?? "-"} | Saldo: ${r.saldo ?? "-"} | Período: ${r.periodo ?? "-"}`
+          `**${r.name}**\n` + (summaryFields.length
+            ? summaryFields.map(([k, l]) => `${l}: ${r[k] ?? "-"}`).join(" | ")
+            : r.error ?? "extraído")
         ).join("\n\n");
         const isNew = !currentConvId;
         const convId = await saveMessages(
@@ -666,16 +741,7 @@ export function Chat() {
             }
 
             if (entry.kind === "extraction") {
-              const LABELS: [keyof ExtractionResult, string][] = [
-                ["titular",       "Titular"],
-                ["institucion",   "Institución"],
-                ["clabe",         "CLABE"],
-                ["cuenta_tarjeta","Cuenta / Tarjeta"],
-                ["rfc_cliente",   "RFC Cliente"],
-                ["rfc_institucion","RFC Institución"],
-                ["saldo",         "Saldo"],
-                ["periodo",       "Período"],
-              ];
+              const LABELS = entry.labels;
               return (
                 <div key={entry.id} className={styles.extractionGrid}>
                   {entry.files.map((file, fi) => (
@@ -789,6 +855,20 @@ export function Chat() {
           <button className={styles.closeX} onClick={() => setDrawerOpen(false)}>×</button>
         </div>
         <div className={styles.drawerBody}>
+          <div>
+            <div className={styles.flabel}>Contexto</div>
+            <div className={styles.presetRow}>
+              {CONTEXT_PRESETS.map(p => (
+                <button
+                  key={p.id}
+                  className={`${styles.presetBtn} ${selectedPresetId === p.id ? styles.presetBtnActive : ""}`}
+                  onClick={() => { setSelectedPresetId(p.id); setSystemPrompt(p.system); }}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div>
             <div className={styles.flabel}>System Prompt</div>
             <textarea className={styles.sysp} value={systemPrompt} onChange={e => setSystemPrompt(e.target.value)} />
